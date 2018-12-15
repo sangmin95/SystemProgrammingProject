@@ -5,14 +5,9 @@
 
 void re(char *filename, char* nickname);
 
-int main(void)
+int main(int ac, char *av[])
 {
-	char filename[100];
-
-	printf("filename : ");
-	scanf("%s", filename);
-
-	re(filename, "hwangsukyoung");
+	re(av[1], av[2]);
 	return 0;
 }
 

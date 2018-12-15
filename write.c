@@ -7,14 +7,9 @@
 void post(char *filename, char *nickname);
 //void display(FILE *fp);
 
-int main(void)
+int main(int ac, char *av[])
 {
-	char filename[100];
-	
-	printf("filename : ");
-	scanf("%s", filename);
-	
-	post(filename, "hwangseokyou");
+	post(av[1], av[2]);
 	return 0;
 }
 
