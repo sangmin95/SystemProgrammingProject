@@ -12,82 +12,103 @@
 #include <curses.h>
 #include <time.h>
 
+#define BUFSIZE 100
+#define LOCAL_ESCAPE_KEY 27 //ESC key
+#define TITLE_LEN 20
+#define NAME_LEN 20
+#define CONTEXT_LINE 27
+#define DATE_LEN 30
+#define WINDOW_WIDTH 70
+#define WINDOW_HEIGHT 30
+#define KEY_N 78
+#define UP 8
+#define DOWN 2
+#define ENTER 10
+
 int firstscreen(void);
 void login(void);
 void post(char *filename, char *nickname);
-void re(char *filename, char *nickname);
+void read_post(char *filename, char *nickname);
 void join(void);
 void board(void);
 int filecheck();
-int tty_mode(int how)
+void process_login();
+void draw_boundary(int origin_x, int origin_y, int width, int height);
+void load_posts(int n);
+void print_posts();
+int keyboard_stream();
+void move_cursor(int direction);
+void make_cursor(int y, int x);
+int tty_mode(int how);
+void set_noecho();
+void itofilename(char* filename,int i);
+
+typedef struct _POST
 {
-	static struct termios original_mode;
+	char title[TITLE_LEN]; //post title
+	char context[CONTEXT_LINE][WINDOW_WIDTH];
+	char date[DATE_LEN];
+	char name[NAME_LEN]; //writer
+} POST;
 
-	if (how == 0)
-		tcgetattr(0, &original_mode);
-
-	else
-		tcsetattr(0, TCSANOW, &original_mode);
-}
-void set_noecho()
-{
-	struct termios ttystate;
-
-	tcgetattr(0, &ttystate);
-	ttystate.c_lflag &= ~ICANON;
-	ttystate.c_cc[VMIN] = 1;
-	ttystate.c_lflag &= ~ECHO;
-
-	tcsetattr(0, TCSANOW, &ttystate);
-}
-
-int number = 0;
-int check = 0;
-char nickname[100];
-char ID[50];
-char path[100];
+char session_id[BUFSIZE], session_nick[BUFSIZE], path[BUFSIZE];
+int post_num, chosen_post = 1, print_start_y = 3; //size of board windows
+WINDOW *win;
+POST *posts; //array of posts
 
 int main()
 {
+
+	process_login(); //sign_in or sign_up
+	post_num = filecheck();
+	board();
+
+	return 0;
+}
+
+void process_login()
+//start login
+{
+	int check;
 	FILE *fp;
 	char buf[100];
+
 	while (1)
 	{
 		check = firstscreen();
 		if (check == 2)
+		//Sign In is chosen
 		{
 			login();
 			strcpy(path, "./logfile/");
-			strcat(path, ID);
-			
-			fp = fopen(path, "r");
+			strcat(path, session_id);
+
+			if ((fp = fopen(path, "r")) == NULL)
+			{
+				perror("fopen error");
+				exit(2);
+			}
 			fscanf(fp, "%s", buf);
-			fscanf(fp, "%s", nickname);
-			printf("AA%sAA\n", nickname);
-			break;
+			fscanf(fp, "%s", session_nick);
+			printf("AA%sAA\n", session_nick);
+			fclose(fp);
+			return;
 		}
 		else if (check == 1)
+		//sign_Up is chosen
 		{
 			join();
 			continue;
 		}
 	}
-	
-
-	// login done.
-
-	
-	return 0;
+	fclose(fp);
 }
 
 void post(char *filename, char *nickname)
 {
 	time_t current_time;
 	FILE *fp;
-	int ch;
-	int row = 0, col = 0, a, b;
-	int MAX = 30;
-	int check;
+	int ch, row = 0, col = 0, a, b, MAX = 30, check;
 	fp = fopen(filename, "w");
 
 	initscr();
@@ -99,9 +120,9 @@ void post(char *filename, char *nickname)
 	//intrflush(stdscr, TRUE);
 	keypad(stdscr, TRUE);
 
-	for (row = 0; row<30; row++)
+	for (row = 0; row < 30; row++)
 	{
-		for (col = 0; col<70; col++)
+		for (col = 0; col < 70; col++)
 		{
 			if (row == 0 || row == MAX - 1 || row == 2)
 			{
@@ -122,7 +143,8 @@ void post(char *filename, char *nickname)
 
 		if (ch == 27)
 		{
-			a = row; b = col;
+			a = row;
+			b = col;
 			move(30, 0);
 			addstr("1.post 2.quit 3.cancel : ");
 			while (1)
@@ -134,14 +156,13 @@ void post(char *filename, char *nickname)
 					{
 						if (a == 2)
 							continue;
-						for (b = 1; b<69; b++)
+						for (b = 1; b < 69; b++)
 						{
 							ch = mvinch(a, b);
 							fprintf(fp, "%c", ch);
 						}
 
 						fprintf(fp, "\n");
-
 					}
 					time(&current_time);
 					fprintf(fp, ctime(&current_time));
@@ -177,11 +198,13 @@ void post(char *filename, char *nickname)
 			}
 			else if (row == 3 && col == 1)
 			{
-				row = 1; col = 68;
+				row = 1;
+				col = 68;
 			}
 			else if (col == 1)
 			{
-				row--; col = 68;
+				row--;
+				col = 68;
 			}
 			else
 			{
@@ -197,7 +220,8 @@ void post(char *filename, char *nickname)
 			{
 				row = row + 2;
 				col = 1;
-				move(row, col); refresh();
+				move(row, col);
+				refresh();
 			}
 			else if (row == 28)
 				continue;
@@ -205,7 +229,8 @@ void post(char *filename, char *nickname)
 			{
 				row++;
 				col = 1;
-				move(row, col); refresh();
+				move(row, col);
+				refresh();
 			}
 		}
 		else if (ch == KEY_UP)
@@ -216,8 +241,8 @@ void post(char *filename, char *nickname)
 				row = row - 2;
 			else
 				row--;
-			move(row, col); refresh();
-
+			move(row, col);
+			refresh();
 		}
 		else if (ch == KEY_DOWN)
 		{
@@ -227,21 +252,24 @@ void post(char *filename, char *nickname)
 				continue;
 			else
 				row++;
-			move(row, col); refresh();
+			move(row, col);
+			refresh();
 		}
 		else if (ch == KEY_LEFT)
 		{
 			if (col == 1)
 				continue;
 			col--;
-			move(row, col); refresh();
+			move(row, col);
+			refresh();
 		}
 		else if (ch == KEY_RIGHT)
 		{
 			if (col == 68)
 				continue;
 			col++;
-			move(row, col); refresh();
+			move(row, col);
+			refresh();
 		}
 		else
 		{
@@ -275,7 +303,7 @@ void post(char *filename, char *nickname)
 	fclose(fp);
 }
 
-void re(char *filename, char *nickname)
+void read_post(char *filename, char *nickname)
 {
 	time_t current_time;
 	int ch;
@@ -292,9 +320,9 @@ void re(char *filename, char *nickname)
 	clear();
 	noecho();
 	keypad(stdscr, TRUE);
-	for (row = 0; row<30; row++)
+	for (row = 0; row < 30; row++)
 	{
-		for (col = 0; col<70; col++)
+		for (col = 0; col < 70; col++)
 		{
 			if (row == 0 || row == 29 || row == 2)
 			{
@@ -312,13 +340,11 @@ void re(char *filename, char *nickname)
 			{
 				ch = getc(fp);
 				mvaddch(a, b, ch);
-
 			}
 			else
 			{
 				ch = getc(fp);
 				mvaddch(a + 1, b, ch);
-
 			}
 		}
 	}
@@ -346,7 +372,6 @@ void re(char *filename, char *nickname)
 		mvaddstr(a + 1, 72, buf);
 		mvaddstr(a + 2, 72, "----------------------------------------------------------------------");
 		a = a + 3;
-
 	}
 	mvaddstr(32, 1, "1.add comment 2.quit : ");
 	temp = a;
@@ -356,7 +381,6 @@ void re(char *filename, char *nickname)
 		if (ch == '1') // comment
 		{
 			mvaddstr(32, 1, "                       ");
-
 
 			for (d = 0; d <= 68; d++)
 			{
@@ -370,7 +394,8 @@ void re(char *filename, char *nickname)
 			mvaddstr(37, 0, "cancel : ESC");
 			move(35, 1);
 			refresh();
-			row = 35;  col = 1;
+			row = 35;
+			col = 1;
 			while (1)
 			{
 				ch = getch();
@@ -380,13 +405,13 @@ void re(char *filename, char *nickname)
 					{
 						for (b = 0; b <= 74; b++)
 							mvaddch(a, b, ' ');
-
-					}refresh();
+					}
+					refresh();
 					mvaddstr(32, 1, "1.add comment 2.quit : ");
 					break;
 					refresh();
 				}
-				else if (ch == 10) // enter
+				else if (ch == ENTER) // enter
 				{
 					fseek(fp, 0, SEEK_END);
 					//fprintf(fp, "\n");
@@ -403,7 +428,7 @@ void re(char *filename, char *nickname)
 					fprintf(fp, "\n");
 					fclose(fp);
 					clear();
-					re(filename, nickname);
+					read_post(filename, nickname);
 					clear();
 					endwin();
 					return;
@@ -446,7 +471,6 @@ void re(char *filename, char *nickname)
 				}
 			}
 
-
 			//fclose(fp);
 		}
 		else if (ch == '2') // quit
@@ -488,7 +512,6 @@ void re(char *filename, char *nickname)
 		}
 	}
 
-
 	endwin();
 	fclose(fp);
 }
@@ -500,7 +523,6 @@ int firstscreen(void)
 	initscr();
 	start_color();
 	init_pair(1, COLOR_WHITE, COLOR_GREEN);
-
 
 	while (1)
 	{
@@ -560,9 +582,9 @@ int firstscreen(void)
 }
 void login(void)
 {
-	char id[50], pwd[50], pwdC[50], buf[80], c;
-	char cwd[PATH_MAX], path[PATH_MAX], fname[PATH_MAX];
-	FILE* fd;
+
+	char id[BUFSIZE], pwd[BUFSIZE], pwdC[BUFSIZE], buf[BUFSIZE], c, cwd[BUFSIZE], path[BUFSIZE], fname[BUFSIZE];
+	FILE *fd;
 	DIR *dir;
 	int i = 0, len, flag = 0;
 
@@ -574,7 +596,7 @@ void login(void)
 
 	printf("\n\n\t\t\t ID : ");
 	scanf("%s", id);
-	strcpy(ID, id);
+
 	if (getcwd(cwd, sizeof(cwd)) != NULL)
 	{
 		strcpy(path, cwd);
@@ -641,7 +663,7 @@ void login(void)
 
 			if (strncmp(pwdC, pwd, len) == 0)
 			{
-				printf("\n\t\t\tLogin success\n"); //login ������
+				printf("\n\t\t\tLogin success\n"); //login ������
 			}
 
 			else
@@ -653,21 +675,21 @@ void login(void)
 
 	if (flag == 0)
 		printf("ID does not exist.\n");
+
+	strcpy(session_id, id);
 }
-void join(void)
+void join()
 {
-	char cwd[PATH_MAX], path[PATH_MAX], ch;
-	char id[50], *pwd1, pwd2[50], name[50], c;
+
+	struct stat st = {0};
+	struct dirent *direntp;
+	char cwd[BUFSIZE], path[BUFSIZE], ch;
+	char id[BUFSIZE], pwd1[BUFSIZE], pwd2[BUFSIZE], name[BUFSIZE], c;
 	int sign_file;
 	int i, len;
 
-	FILE* fd;
+	FILE *fd;
 	DIR *dir;
-
-	struct stat st = { 0 };
-	struct dirent *direntp;
-
-	pwd1 = (char*)malloc(sizeof(char) * 50);
 
 	for (i = 0; i < 50; i++)
 	{
@@ -698,10 +720,8 @@ void join(void)
 			printf("\t\t\tID already existing.");
 			//display_menu();
 			sleep(1);
-			return ;
+			return;
 		}
-
-
 		else if (strcmp(direntp->d_name, id) != 0)
 			sign_file = open(id, O_WRONLY | O_CREAT, 0644);
 	}
@@ -791,12 +811,11 @@ void join(void)
 		strcat(pwd1, "\n");
 		write(sign_file, pwd1, strlen(pwd1));
 	}
-
 	else
 	{
 		printf("\t\t\t\t(password error)\n");
 		//display_menu();
-		return 0;
+		return;
 	}
 
 	printf("\n\t\t\t Nickname : ");
@@ -807,18 +826,15 @@ void join(void)
 	strcat(path, id);
 	rename(id, path);
 }
-void board(void)
-{
 
-}
+
 int filecheck()
 {
 	int n = 1;
 	char filename[20];
 	while (1)
 	{
-		sprintf(filename, "%d", n);
-		strcat(filename, ".txt");
+		itofilename(filename,n);
 		if (access(filename, F_OK) == 0)
 		{
 			n++;
@@ -829,8 +845,215 @@ int filecheck()
 			n--;
 			break;
 		}
-		return n;
 	}
+	if (n > 6)
+		return 5; //maximum posts
+	return n;
+}
+
+void itofilename(char* filename,int i)
+{
+	sprintf(filename, "%d", i);
+	strcat(filename, ".txt");
+}
+
+
+
+void board()
+{
+	int flag;
+	char c, filename[20];
+
+	load_posts(post_num);
+
+	win = initscr();
+	clear();
+	draw_boundary(0, 0, WINDOW_HEIGHT, WINDOW_WIDTH);
+
+	print_posts();
+	refresh();
+	make_cursor(print_start_y, 1); // >> : cursor
+
+	flag = keyboard_stream(); //방향키
 	
-	
+	if(flag == 0){
+		printf("ESC키가 입력되어 프로그램을 종료합니다.\n");
+		endwin();
+	}
+	if(flag == 1){
+		itofilename(filename,chosen_post);
+		read_post(filename, session_nick);
+	}
+	if(flag == 2){
+		//go to write mode
+
+	}
+}
+
+void make_cursor(int y, int x)
+{
+	mvprintw(y, x, "%s", ">>");
+	move(y, x--);
+	refresh();
+}
+
+void move_cursor(int direction)
+{
+
+	int x, y;
+	getyx(win, y, x);
+
+	if (direction == UP)
+	{
+		if (y <= print_start_y)
+			return;
+
+		mvprintw(y, x, "   ");   //  >>을 지우고
+		make_cursor(y -= 5, 1); //  4줄 위에 >> 그리기
+		chosen_post--;
+	}
+
+	if (direction == DOWN)
+	{
+		if (y > print_start_y - 1 + 5 * (post_num - 1))
+			return;
+
+		mvprintw(y, 1, "   ");   // >>을 지우고
+		make_cursor(y += 5, 1); //  4줄 아래 >> 그리기
+		chosen_post++;
+	}
+}
+
+int keyboard_stream()
+{
+	//flag : ESC 0, ENTER 1, N 2, ERROR -1
+	int c, flag = -1;
+
+	chosen_post = 1; //cursor always located on first post
+	//keypad(stdscr, TRUE);
+
+	while (c = getch())
+	{
+
+		if (c == KEY_UP)			move_cursor(UP);
+		if (c == KEY_DOWN)			move_cursor(DOWN);
+
+		if (c == LOCAL_ESCAPE_KEY){ 
+			//ESC
+			flag = 0;	break;
+		}
+
+		if (c == ENTER){
+			//read post
+			flag = 1; break;
+		}
+
+		if (c == KEY_N){
+			//write new post
+			flag = 2;	break;
+		}
+	}
+
+	return flag;
+}
+
+void print_posts()
+{
+	int i, x, y;
+	move(0, 0);
+	for (i = 1; i <= post_num; i++)
+	{
+		getyx(win, y, x);
+		mvprintw(y += 3, 5, "%d)", i); //the number of lines btw posts = 3
+		mvprintw(y, x += 4, "[title] : %s\n", posts[i].title);
+		mvprintw(y, WINDOW_WIDTH - 24, "<writer> : %s\n", posts[i].name);
+		mvprintw(y + 1, WINDOW_WIDTH - 24, "%s\n", posts[i].date); // the length of date is 24byte
+	}
+}
+
+void load_posts(int n) //n : the number of posts
+{
+	int i, j, k;
+	posts = (POST *)malloc(sizeof(POST) * (n + 1));
+	char **filename;
+	filename = (char **)malloc(sizeof(char *) * n);
+	for (i = 1; i <= n; i++)
+	{
+		filename[i] = (char *)malloc(sizeof(char) * 20);
+		sprintf(filename[i], "%d", i);
+		strcat(filename[i], ".txt");
+	}
+
+	for (i = 1; i <= n; i++)
+	{
+		//[1..n].txt 까지 열기
+		FILE *fp = fopen(filename[i], "r");
+
+		//title 받아오기
+		fgets(posts[i].title, WINDOW_WIDTH, fp);
+		for (j = 0; j < WINDOW_WIDTH; j++)
+			if (posts[i].title[j] == '\n')
+				posts[i].title[j] = '\0';
+
+		//context 받아오기
+		for (j = 1; j < CONTEXT_LINE; j++)
+		{
+			fgets(posts[i].context[j], WINDOW_WIDTH, fp);
+			posts[i].context[j][WINDOW_WIDTH - 2] = '\0';
+		}
+
+		//date 받아오기
+		fgets(posts[i].date, WINDOW_WIDTH, fp);
+		for (j = 0; j < DATE_LEN; j++)
+			if (posts[i].date[j] == '\n')
+				posts[i].date[j] = '\0';
+
+		//writer 받아오기
+		fgets(posts[i].name, WINDOW_WIDTH, fp);
+		for (j = 0; j < NAME_LEN; j++)
+			if (posts[i].name[j] == '\n')
+				posts[i].name[j] = '\0';
+		fclose(fp);
+	}
+}
+
+void draw_boundary(int origin_y, int origin_x, int width, int height)
+{
+
+	int i, j;
+
+	move(origin_y, origin_x);
+	for (origin_x = 0; origin_x < 30; origin_x++)
+	{
+		for (origin_y = 0; origin_y < 70; origin_y++)
+		{
+			if (origin_x == 0 || origin_x == 30 - 1)
+			{
+				move(origin_x, origin_y);
+				addch('*');
+			}
+		}
+	}
+}
+
+int tty_mode(int how)
+{
+	static struct termios original_mode;
+
+	if (how == 0)
+		tcgetattr(0, &original_mode);
+
+	else
+		tcsetattr(0, TCSANOW, &original_mode);
+}
+void set_noecho()
+{
+	struct termios ttystate;
+
+	tcgetattr(0, &ttystate);
+	ttystate.c_lflag &= ~ICANON;
+	ttystate.c_cc[VMIN] = 1;
+	ttystate.c_lflag &= ~ECHO;
+
+	tcsetattr(0, TCSANOW, &ttystate);
 }
