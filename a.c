@@ -30,7 +30,7 @@ void login(void);
 void post(char *filename, char *nickname);
 void read_post(char *filename, char *nickname);
 void join(void);
-void board(void);
+void board(int );
 int filecheck();
 void process_login();
 void draw_boundary(int origin_x, int origin_y, int width, int height);
@@ -53,15 +53,17 @@ typedef struct _POST
 
 char session_id[BUFSIZE], session_nick[BUFSIZE], path[BUFSIZE];
 int post_num, chosen_post = 1, print_start_y = 3; //size of board windows
+int page = 1;
+int total_page;
 WINDOW *win;
 POST *posts; //array of posts
 
 int main()
 {
-
 	process_login(); //sign_in or sign_up
 	post_num = filecheck();
-	board();
+	printf("AA%dAA\n", post_num);
+	board(page);
 
 	return 0;
 }
@@ -90,7 +92,7 @@ void process_login()
 			}
 			fscanf(fp, "%s", buf);
 			fscanf(fp, "%s", session_nick);
-			printf("AA%sAA\n", session_nick);
+			//printf("AA%sAA\n", session_nick);
 			fclose(fp);
 			return;
 		}
@@ -170,7 +172,9 @@ void post(char *filename, char *nickname)
 					fprintf(fp, "\n");
 					clear();
 					endwin();
-					return;
+					fclose(fp);
+					board(page);
+					
 				}
 				else if (check == '2')
 				{
@@ -178,7 +182,8 @@ void post(char *filename, char *nickname)
 					endwin();
 					fclose(fp);
 					remove(filename);
-					return;
+					post_num--;
+					board(page);
 				}
 				else if (check == '3')
 				{
@@ -580,6 +585,7 @@ int firstscreen(void)
 	}
 	endwin();
 }
+
 void login(void)
 {
 
@@ -659,9 +665,9 @@ void login(void)
 
 			tty_mode(1);
 
-			len = strlen(pwd);
+			//len = strlen(pwdC);
 
-			if (strncmp(pwdC, pwd, len) == 0)
+			if (strcmp(pwdC, pwd) == 0)
 			{
 				printf("\n\t\t\tLogin success\n"); //login ������
 			}
@@ -678,6 +684,7 @@ void login(void)
 
 	strcpy(session_id, id);
 }
+
 void join()
 {
 
@@ -827,7 +834,6 @@ void join()
 	rename(id, path);
 }
 
-
 int filecheck()
 {
 	int n = 1;
@@ -857,20 +863,34 @@ void itofilename(char* filename,int i)
 	strcat(filename, ".txt");
 }
 
-
-
-void board()
+void board(int p)
 {
 	int flag;
+	int n = 1;
+	char buf[50];
 	char c, filename[20];
+	//mvaddch(29, 34, );
+	//mvaddch(29, 35, '/');
+	//mvaddch(29, 36, );
+	post_num = filecheck();
 
+	if (post_num % 5 == 0)
+	{
+		total_page = post_num / 5;
+	}
+	else
+	{
+		total_page = post_num / 5;
+		total_page++;
+	}
 	load_posts(post_num);
+
 
 	win = initscr();
 	clear();
 	draw_boundary(0, 0, WINDOW_HEIGHT, WINDOW_WIDTH);
 
-	print_posts();
+	print_posts(p);
 	refresh();
 	make_cursor(print_start_y, 1); // >> : cursor
 
@@ -883,10 +903,33 @@ void board()
 	if(flag == 1){
 		itofilename(filename,chosen_post);
 		read_post(filename, session_nick);
+		board(page);
 	}
 	if(flag == 2){
 		//go to write mode
-
+		post_num++;
+		sprintf(buf, "%d", post_num);
+		strcat(buf, ".txt");
+		post(buf, session_nick);
+	}
+	if (flag == 3) // <
+	{
+		if (page > 1)
+		{
+			clear();
+			endwin();
+			board(page);
+		}
+	
+	}
+	if (flag == 4) // >
+	{
+		if (page < total_page)
+		{
+			clear();
+			endwin();
+			board(page);
+		}	
 	}
 }
 
@@ -952,16 +995,28 @@ int keyboard_stream()
 			//write new post
 			flag = 2;	break;
 		}
+
+		if (c == KEY_LEFT)
+		{
+			if (page != 1) page--;
+			flag = 3; break;
+		}
+		if (c == KEY_RIGHT)
+		{
+			if (page != total_page) page++;
+			flag = 4; break;
+		}
+
 	}
 
 	return flag;
 }
 
-void print_posts()
+void print_posts(int p)
 {
 	int i, x, y;
 	move(0, 0);
-	for (i = 1; i <= post_num; i++)
+	for (i = 5*(p-1)+1; i <= p*5; i++)
 	{
 		getyx(win, y, x);
 		mvprintw(y += 3, 5, "%d)", i); //the number of lines btw posts = 3
@@ -1046,6 +1101,7 @@ int tty_mode(int how)
 	else
 		tcsetattr(0, TCSANOW, &original_mode);
 }
+
 void set_noecho()
 {
 	struct termios ttystate;
