@@ -62,7 +62,7 @@ int main()
 {
 	process_login(); //sign_in or sign_up
 	post_num = filecheck();
-	printf("AA%dAA\n", post_num);
+	
 	board(page);
 
 	return 0;
@@ -837,7 +837,7 @@ void join()
 int filecheck()
 {
 	int n = 1;
-	char filename[20];
+	char filename[1000];
 	while (1)
 	{
 		itofilename(filename,n);
@@ -852,8 +852,7 @@ int filecheck()
 			break;
 		}
 	}
-	if (n > 6)
-		return 5; //maximum posts
+	
 	return n;
 }
 
@@ -869,9 +868,7 @@ void board(int p)
 	int n = 1;
 	char buf[50];
 	char c, filename[20];
-	//mvaddch(29, 34, );
-	//mvaddch(29, 35, '/');
-	//mvaddch(29, 36, );
+	
 	post_num = filecheck();
 
 	if (post_num % 5 == 0)
@@ -883,54 +880,66 @@ void board(int p)
 		total_page = post_num / 5;
 		total_page++;
 	}
+	
+	refresh();
 	load_posts(post_num);
 
 
 	win = initscr();
 	clear();
 	draw_boundary(0, 0, WINDOW_HEIGHT, WINDOW_WIDTH);
-
+	mvaddch(28, 34, page + 48);
+	mvaddch(28, 35, '/');
+	mvaddch(28, 36, total_page + 48);
+	
 	print_posts(p);
 	refresh();
 	make_cursor(print_start_y, 1); // >> : cursor
 
-	flag = keyboard_stream(); //방향키
-	
-	if(flag == 0){
-		printf("ESC키가 입력되어 프로그램을 종료합니다.\n");
-		endwin();
-	}
-	if(flag == 1){
-		itofilename(filename,chosen_post);
-		read_post(filename, session_nick);
-		board(page);
-	}
-	if(flag == 2){
-		//go to write mode
-		post_num++;
-		sprintf(buf, "%d", post_num);
-		strcat(buf, ".txt");
-		post(buf, session_nick);
-	}
-	if (flag == 3) // <
+	while (1)
 	{
-		if (page > 1)
-		{
-			clear();
+		flag = keyboard_stream(); //방향키
+
+		if (flag == 0) {
+			printf("ESC키가 입력되어 프로그램을 종료합니다.\n");
 			endwin();
+			break;
+		}
+		if (flag == 1) {
+			itofilename(filename, chosen_post);
+			read_post(filename, session_nick);
 			board(page);
 		}
-	
-	}
-	if (flag == 4) // >
-	{
-		if (page < total_page)
+		if (flag == 2) {
+			//go to write mode
+			post_num++;
+			sprintf(buf, "%d", post_num);
+			strcat(buf, ".txt");
+			post(buf, session_nick);
+		}
+		if (flag == 3) // <
 		{
-			clear();
-			endwin();
-			board(page);
-		}	
+			if (page > 1)
+			{
+				if (page != 1) { page--; }
+				clear();
+				endwin();
+				board(page);
+			}
+
+		}
+		if (flag == 4) // >
+		{
+			if (page < total_page)
+			{
+				if (page != total_page) { page++; }
+				clear();
+				endwin();
+				board(page);
+			}
+		}
 	}
+	
 }
 
 void make_cursor(int y, int x)
@@ -945,7 +954,7 @@ void move_cursor(int direction)
 
 	int x, y;
 	getyx(win, y, x);
-
+	chosen_post = (page - 1) * 5 + 1;
 	if (direction == UP)
 	{
 		if (y <= print_start_y)
@@ -958,8 +967,25 @@ void move_cursor(int direction)
 
 	if (direction == DOWN)
 	{
-		if (y > print_start_y - 1 + 5 * (post_num - 1))
-			return;
+		if (page == total_page)
+		{
+			if (post_num % 5 == 0)
+			{
+				if (y > print_start_y - 1 + 5 * (5 - 1))
+					return;
+			}
+			else
+			{
+				if (y > print_start_y - 1 + 5 * (post_num % 5 - 1))
+					return;
+			}
+			
+		}
+		else {
+			if (y > print_start_y - 1 + 5 * (5 - 1))
+				return;
+		}
+		
 
 		mvprintw(y, 1, "   ");   // >>을 지우고
 		make_cursor(y += 5, 1); //  4줄 아래 >> 그리기
@@ -998,12 +1024,10 @@ int keyboard_stream()
 
 		if (c == KEY_LEFT)
 		{
-			if (page != 1) page--;
 			flag = 3; break;
 		}
 		if (c == KEY_RIGHT)
 		{
-			if (page != total_page) page++;
 			flag = 4; break;
 		}
 
@@ -1016,13 +1040,42 @@ void print_posts(int p)
 {
 	int i, x, y;
 	move(0, 0);
-	for (i = 5*(p-1)+1; i <= p*5; i++)
+	if (page < total_page)
 	{
-		getyx(win, y, x);
-		mvprintw(y += 3, 5, "%d)", i); //the number of lines btw posts = 3
-		mvprintw(y, x += 4, "[title] : %s\n", posts[i].title);
-		mvprintw(y, WINDOW_WIDTH - 24, "<writer> : %s\n", posts[i].name);
-		mvprintw(y + 1, WINDOW_WIDTH - 24, "%s\n", posts[i].date); // the length of date is 24byte
+		for (i = 5 * (p - 1) + 1; i <= p * 5; i++)
+		{
+			getyx(win, y, x);
+			mvprintw(y += 3, 5, "%d)", i); //the number of lines btw posts = 3
+			mvprintw(y, x += 4, "[title] : %s\n", posts[i].title);
+			mvprintw(y, WINDOW_WIDTH - 24, "<writer> : %s\n", posts[i].name);
+			mvprintw(y + 1, WINDOW_WIDTH - 24, "%s\n", posts[i].date); // the length of date is 24byte
+		}
+	}
+	else
+	{
+		if (post_num % 5 == 0)
+		{
+			for (i = 5 * (p - 1) + 1; i <= 5 * (p - 1) + 5; i++)
+			{
+				getyx(win, y, x);
+				mvprintw(y += 3, 5, "%d)", i); //the number of lines btw posts = 3
+				mvprintw(y, x += 4, "[title] : %s\n", posts[i].title);
+				mvprintw(y, WINDOW_WIDTH - 24, "<writer> : %s\n", posts[i].name);
+				mvprintw(y + 1, WINDOW_WIDTH - 24, "%s\n", posts[i].date); // the length of date is 24byte
+			}
+		}
+		else
+		{
+			for (i = 5 * (p - 1) + 1; i <= 5 * (p - 1) + post_num % 5; i++)
+			{
+				getyx(win, y, x);
+				mvprintw(y += 3, 5, "%d)", i); //the number of lines btw posts = 3
+				mvprintw(y, x += 4, "[title] : %s\n", posts[i].title);
+				mvprintw(y, WINDOW_WIDTH - 24, "<writer> : %s\n", posts[i].name);
+				mvprintw(y + 1, WINDOW_WIDTH - 24, "%s\n", posts[i].date); // the length of date is 24byte
+			}
+		}
+		
 	}
 }
 
