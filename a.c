@@ -898,6 +898,7 @@ void board(int p)
 
 	while (1)
 	{
+		
 		flag = keyboard_stream(); //방향키
 
 		if (flag == 0) {
@@ -906,6 +907,7 @@ void board(int p)
 			break;
 		}
 		if (flag == 1) {
+			
 			itofilename(filename, chosen_post);
 			read_post(filename, session_nick);
 			board(page);
@@ -921,7 +923,9 @@ void board(int p)
 		{
 			if (page > 1)
 			{
+				
 				if (page != 1) { page--; }
+				
 				clear();
 				endwin();
 				board(page);
@@ -932,7 +936,9 @@ void board(int p)
 		{
 			if (page < total_page)
 			{
+				
 				if (page != total_page) { page++; }
+				
 				clear();
 				endwin();
 				board(page);
@@ -951,10 +957,10 @@ void make_cursor(int y, int x)
 
 void move_cursor(int direction)
 {
-
+	
 	int x, y;
 	getyx(win, y, x);
-	chosen_post = (page - 1) * 5 + 1;
+	
 	if (direction == UP)
 	{
 		if (y <= print_start_y)
@@ -998,9 +1004,9 @@ int keyboard_stream()
 	//flag : ESC 0, ENTER 1, N 2, ERROR -1
 	int c, flag = -1;
 
-	chosen_post = 1; //cursor always located on first post
+	
 	//keypad(stdscr, TRUE);
-
+	chosen_post = (page - 1) * 5 + 1;
 	while (c = getch())
 	{
 
